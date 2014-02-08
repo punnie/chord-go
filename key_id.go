@@ -1,24 +1,24 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
-  "bytes"
 )
 
 const (
-  sha1Min = "0000000000000000000000000000000000000000"
-  sha1Max = "ffffffffffffffffffffffffffffffffffffffff"
+	sha1Min = "0000000000000000000000000000000000000000"
+	sha1Max = "ffffffffffffffffffffffffffffffffffffffff"
 )
 
 type KeyID struct {
-	hex     string
+	hex string
 }
 
 func NewKeyID(hex string) *KeyID {
-  return &KeyID{
-    hex: hex,
-  }
+	return &KeyID{
+		hex: hex,
+	}
 }
 
 func (k *KeyID) GenerateNodeKeyID(seed string) error {
@@ -42,16 +42,16 @@ func (k *KeyID) String() string {
 //}
 
 func (k *KeyID) elementOf(left *KeyID, right *KeyID) bool {
-  keyHex := []byte(k.String())
-  leftHex := []byte(left.String())
-  rightHex := []byte(right.String())
+	keyHex := []byte(k.String())
+	leftHex := []byte(left.String())
+	rightHex := []byte(right.String())
 
-  if(bytes.Compare(leftHex, rightHex) < 0) {
-    return bytes.Compare(keyHex, leftHex) > 0 && bytes.Compare(keyHex, rightHex) <= 0
-  } else {
-    overFlow := bytes.Compare(keyHex, leftHex) > 0 && bytes.Compare(keyHex, []byte(sha1Max)) <= 0
-    underFlow := bytes.Compare(keyHex, []byte(sha1Min)) > 0 && bytes.Compare(keyHex, rightHex) <= 0
+	if bytes.Compare(leftHex, rightHex) < 0 {
+		return bytes.Compare(keyHex, leftHex) > 0 && bytes.Compare(keyHex, rightHex) <= 0
+	} else {
+		overFlow := bytes.Compare(keyHex, leftHex) > 0 && bytes.Compare(keyHex, []byte(sha1Max)) <= 0
+		underFlow := bytes.Compare(keyHex, []byte(sha1Min)) >= 0 && bytes.Compare(keyHex, rightHex) <= 0
 
-    return overFlow || underFlow
-  }
+		return overFlow || underFlow
+	}
 }
