@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
+	"fmt"
+	"math/big"
 )
 
 const (
@@ -12,12 +14,20 @@ const (
 )
 
 type KeyID struct {
-	hex string
+	hex     string
+	integer *big.Int
 }
 
 func NewKeyID(hex string) *KeyID {
+	i, success := big.NewInt(0).SetString(hex, 16)
+
+	if success != true {
+		panic("lol errors")
+	}
+
 	return &KeyID{
-		hex: hex,
+		hex:     hex,
+		integer: i,
 	}
 }
 
@@ -27,6 +37,16 @@ func (k *KeyID) GenerateNodeKeyID(seed string) error {
 
 	h := hex.EncodeToString(s.Sum(nil))
 	k.hex = h
+
+	println(h)
+
+	i, success := big.NewInt(0).SetString(h, 16)
+
+	if success != true {
+		panic("lol errors")
+	}
+
+	k.integer = i
 
 	return nil
 }
