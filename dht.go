@@ -36,7 +36,7 @@ func NewDHT(self *Node) *DHT {
 	// TODO: implement worker number
 	// also: make threadsafe, which _isn't_
 	for i := 0; i < WORKER_THREADS; i++ {
-		go dht.Worker()
+		go dht.GlobalInboundWorker()
 	}
 
 	return &dht
@@ -91,20 +91,27 @@ func (d *DHT) Listen() {
 	}
 }
 
-func (d *DHT) Worker() {
-	println("dht worker started")
-
+func (d *DHT) GlobalInboundWorker() {
 	for {
 		m := <-d.globalInbound
 
-    println(m.String())
+    println("receiving      :", m.String())
 
-    switch m.Intent {
-    case REQUEST_SUCCESSOR:
-    case REQUEST_PING:
-      println("LOL")
-      m.Sender.ReplyPing()
-    }
+		switch m.Intent { // perhaps make functions out of this
+		case REQUEST_SUCCESSOR:
+      query := m.Parameters[0]
+      fakeNode := FakeNode(query)
+      replyNode, err := d.findSuccessor(fakeNode)
+
+      if err != nil {
+        panic(err)
+      }
+
+      m.Sender.ReplySuccessor(replyNode)
+
+		case REQUEST_PING:
+			m.Sender.ReplyPing()
+		}
 	}
 }
 
