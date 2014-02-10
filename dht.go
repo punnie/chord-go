@@ -53,7 +53,7 @@ func (d *DHT) Join(n *Node) {
 		panic(err)
 	}
 
-	d.findSuccessor(n, d.self) // blocks
+	d.findSuccessor(d.self) // blocks
 }
 
 func (d *DHT) Listen() {
@@ -111,7 +111,6 @@ func (d *DHT) Worker() {
 
 	for {
 		m := <-d.messages
-
 		println("message     :", m.String())
 	}
 }
@@ -122,12 +121,26 @@ func (d *DHT) Worker() {
 //
 //
 
-func (d *DHT) findSuccessor(target *Node, query *Node) *Node {
+func (d *DHT) findSuccessor(node *Node) *Node {
+	if node.Id().elementOf(d.self.Id(), d.successor.Id()) {
+		return d.successor
+	} else {
+		queryNode := d.closestPrecedingNode(node)
+		println(queryNode)
+		// send "findSuccessor" message to queryNode
+	}
 
 	return &Node{}
 }
 
-func (d DHT) closestPrecedingNode(node *Node) {
+func (d *DHT) closestPrecedingNode(node *Node) *Node {
+	for i := BITS; i > 0; i-- {
+		if d.finger[i].Id().elementOf(d.self.Id(), node.Id()) {
+			return d.finger[i]
+		}
+	}
+
+	return d.self
 }
 
 func (d *DHT) stabilize() {
