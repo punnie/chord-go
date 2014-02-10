@@ -14,10 +14,10 @@ const (
 )
 
 type Message struct {
-	Intent     string    `bson:"intent"`
-	Parameters []string  `bson:"parameters"`
-	Timestamp  time.Time `bson:"timestamp"`
-  Sender     *Node
+	Intent     string    `json:"intent"`
+	Parameters []string  `json:"parameters"`
+	Timestamp  time.Time `json:"timestamp"`
+	Sender     *Node     `json:"-"`
 }
 
 func NewFindSuccessorMessage(params []string) *Message {
