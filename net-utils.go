@@ -57,7 +57,7 @@ func readPayload(reader *bufio.Reader, size uint32) ([]byte, error) {
 			return nil, err
 		}
 
-		payload.Write(payloadBuffer[0:n])
+		payload.Write(payloadBuffer[i : i+n])
 
 		i += n
 	}
