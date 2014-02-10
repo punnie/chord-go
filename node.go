@@ -31,8 +31,8 @@ func NewNode(address string) *Node {
 	return n
 }
 
-func (n Node) Id() KeyID {
-	return *n.id
+func (n Node) Id() *KeyID {
+	return n.id
 }
 
 func (n Node) Address() string {
