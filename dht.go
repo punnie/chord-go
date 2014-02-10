@@ -1,37 +1,41 @@
 package main
 
 import (
-	"bufio"
 	//"fmt"
 	"net"
 	"os"
 	//"time"
 )
 
-const BITS = 160 // sha1
+const (
+	BITS           = 160 // sha1
+	WORKER_THREADS = 1
+)
 
 type DHT struct {
-	self        *Node
-	finger      []*Node
-	predecessor *Node
-	successor   *Node
-	messages    chan *Message
+	self          *Node
+	finger        []*Node
+	predecessor   *Node
+	successor     *Node
+	globalInbound chan *Message
 }
 
 func NewDHT(self *Node) *DHT {
 	dht := DHT{
-		self:        self,
-		finger:      make([]*Node, BITS),
-		predecessor: nil,
-		successor:   self,
-		messages:    make(chan *Message, 100),
+		self:          self,
+		finger:        make([]*Node, BITS),
+		predecessor:   nil,
+		successor:     self,
+		globalInbound: make(chan *Message, 100),
 	}
 
 	for i, _ := range dht.finger {
 		dht.finger[i] = self
 	}
 
-	for i := 0; i < 1; i++ { // TODO: implement worker number
+	// TODO: implement worker number
+	// also: make threadsafe, which _isn't_
+	for i := 0; i < WORKER_THREADS; i++ {
 		go dht.Worker()
 	}
 
@@ -46,14 +50,23 @@ func (d *DHT) Retrieve(id int64) ([]byte, error) {
 	return nil, nil
 }
 
-func (d *DHT) Join(n *Node) {
-	err := n.Connect()
+func (d *DHT) Join(node *Node) {
+	err := node.Connect(d.globalInbound)
 
 	if err != nil {
 		panic(err)
 	}
 
-	d.findSuccessor(d.self) // blocks
+  node.SendPing()
+
+	successor, err := node.GetSuccessor(d.self) // blocks
+
+	if err != nil {
+		panic(err)
+	}
+
+	println(successor)
+
 }
 
 func (d *DHT) Listen() {
@@ -73,45 +86,25 @@ func (d *DHT) Listen() {
 			println("Error accepting!")
 		}
 
-		go d.handleConnection(conn)
+		node := NewNode(conn.RemoteAddr().String())
+		node.Accept(conn, d.globalInbound)
 	}
 }
-
-func (d *DHT) handleConnection(conn net.Conn) {
-	reader := bufio.NewReader(conn)
-
-	for {
-		mesBuffer, err := readMessage(reader)
-
-		if err != nil {
-			conn.Close()
-			return
-		}
-
-		mes, err := MessageDecode(mesBuffer)
-
-		if err != nil {
-			println("Error decoding message!")
-			continue
-		}
-
-		println("message from:", conn.RemoteAddr().String())
-		d.messages <- mes
-	}
-}
-
-//
-//
-//
-//
-//
 
 func (d *DHT) Worker() {
 	println("dht worker started")
 
 	for {
-		m := <-d.messages
-		println("message     :", m.String())
+		m := <-d.globalInbound
+
+    println(m.String())
+
+    switch m.Intent {
+    case REQUEST_SUCCESSOR:
+    case REQUEST_PING:
+      println("LOL")
+      m.Sender.ReplyPing()
+    }
 	}
 }
 
@@ -121,21 +114,26 @@ func (d *DHT) Worker() {
 //
 //
 
-func (d *DHT) findSuccessor(node *Node) *Node {
-	if node.Id().elementOf(d.self.Id(), d.successor.Id()) {
-		return d.successor
+func (d *DHT) findSuccessor(node *Node) (*Node, error) {
+	if node.Id().elementOf(d.self.Id(), d.successor.Id()) { // this interval is (]
+		println("oix")
+		return d.successor, nil
 	} else {
+		println("oix2")
 		queryNode := d.closestPrecedingNode(node)
-		println(queryNode)
-		// send "findSuccessor" message to queryNode
-	}
+		resultNode, err := queryNode.GetSuccessor(node)
 
-	return &Node{}
+		if err != nil {
+			return nil, err
+		}
+
+		return resultNode, nil
+	}
 }
 
 func (d *DHT) closestPrecedingNode(node *Node) *Node {
 	for i := BITS; i > 0; i-- {
-		if d.finger[i].Id().elementOf(d.self.Id(), node.Id()) {
+		if d.finger[i].Id().elementOf(d.self.Id(), node.Id()) { // this interval is ()
 			return d.finger[i]
 		}
 	}

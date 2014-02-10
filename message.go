@@ -6,10 +6,26 @@ import (
 	"time"
 )
 
+const (
+	REQUEST_SUCCESSOR = "REQ SUCCESSOR"
+	REPLY_SUCCESSOR   = "ACK SUCCESSOR"
+	REQUEST_PING      = "PING"
+	REPLY_PING        = "PONG"
+)
+
 type Message struct {
 	Intent     string    `bson:"intent"`
 	Parameters []string  `bson:"parameters"`
 	Timestamp  time.Time `bson:"timestamp"`
+  Sender     *Node
+}
+
+func NewFindSuccessorMessage(params []string) *Message {
+	return &Message{
+		Intent:     REQUEST_SUCCESSOR,
+		Parameters: params,
+		Timestamp:  time.Now().UTC(),
+	}
 }
 
 func MessageDecode(buf []byte) (*Message, error) {

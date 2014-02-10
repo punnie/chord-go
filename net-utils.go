@@ -27,7 +27,7 @@ func readSize(reader *bufio.Reader) (uint32, error) {
 	sizeBuffer := make([]byte, 4)
 
 	for i := 0; i < 4; {
-		n, err := reader.Read(sizeBuffer)
+    n, err := reader.Read(sizeBuffer) // TODO: this has bugs
 
 		if err != nil {
 			return 0, err
