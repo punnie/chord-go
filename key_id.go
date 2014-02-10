@@ -75,3 +75,26 @@ func (k *KeyID) elementOf(left *KeyID, right *KeyID) bool {
 		return overFlow || underFlow
 	}
 }
+
+func (k *KeyID) CalculateForFinger(exp int) *KeyID {
+	// n + b^(l) mod 2^m
+	// b is always 2
+	n := k.integer
+
+	b := new(big.Int).SetUint64(uint64(2)) // TODO: magic numbers
+	m := new(big.Int).SetUint64(uint64(BITS))
+	l := new(big.Int).SetUint64(uint64(exp))
+
+	mod := new(big.Int).Exp(b, m, nil)
+	offset := new(big.Int).Exp(b, l, nil)
+
+	left := new(big.Int).Add(n, offset)
+	result := new(big.Int).Mod(left, mod)
+
+	hex := fmt.Sprintf("%040x", result)
+
+	return &KeyID{
+		hex:     hex,
+		integer: result,
+	}
+}

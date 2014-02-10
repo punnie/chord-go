@@ -39,3 +39,11 @@ func TestKeyElementOf(t *testing.T) {
 		t.Fatal("Comparison failed")
 	}
 }
+
+func TestFingerCalculations(t *testing.T) {
+	k1 := NewKeyID("ffff000000000000000000000000000000000000")
+
+	for i := 0; i < BITS; i++ {
+		println(k1.CalculateForFinger(i).String())
+	}
+}
