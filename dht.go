@@ -54,13 +54,13 @@ func (d *DHT) Join(node *Node) {
 		panic(err)
 	}
 
-  successor, err := node.RequestSuccessor(d.self) // blocks
+	successor, err := node.RequestSuccessor(d.self) // blocks
 
-  if err != nil {
-    panic(err)
-  }
+	if err != nil {
+		panic(err)
+	}
 
-  println(successor)
+	println(successor)
 
 }
 
@@ -68,7 +68,7 @@ func (d *DHT) Listen() {
 	sock, err := net.Listen("tcp", d.self.Address())
 
 	if err != nil {
-    panic(err)
+		panic(err)
 	}
 
 	println("Listening on", d.self.Address())
@@ -89,19 +89,19 @@ func (d *DHT) GlobalInboundWorker() {
 	for {
 		m := <-d.globalInbound
 
-    println("receiving      :", m.String())
+		println("receiving      :", m.String())
 
 		switch m.Intent { // perhaps make functions out of this
 		case REQUEST_SUCCESSOR:
-      query := m.Parameters[0]
-      fakeNode := FakeNode(query)
-      replyNode, err := d.findSuccessor(fakeNode)
+			query := m.Parameters[0]
+			fakeNode := FakeNode(query)
+			replyNode, err := d.findSuccessor(fakeNode)
 
-      if err != nil {
-        panic(err)
-      }
+			if err != nil {
+				panic(err)
+			}
 
-      m.Sender.ReplySuccessor(replyNode)
+			m.Sender.ReplySuccessor(replyNode)
 
 		case REQUEST_PING:
 			m.Sender.ReplyPing()
