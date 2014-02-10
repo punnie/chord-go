@@ -1,10 +1,7 @@
 package main
 
 import (
-	//"fmt"
 	"net"
-	"os"
-	//"time"
 )
 
 const (
@@ -57,15 +54,13 @@ func (d *DHT) Join(node *Node) {
 		panic(err)
 	}
 
-  node.SendPing()
+  successor, err := node.RequestSuccessor(d.self) // blocks
 
-	successor, err := node.GetSuccessor(d.self) // blocks
+  if err != nil {
+    panic(err)
+  }
 
-	if err != nil {
-		panic(err)
-	}
-
-	println(successor)
+  println(successor)
 
 }
 
@@ -73,8 +68,7 @@ func (d *DHT) Listen() {
 	sock, err := net.Listen("tcp", d.self.Address())
 
 	if err != nil {
-		println("Error listening:", err)
-		os.Exit(1)
+    panic(err)
 	}
 
 	println("Listening on", d.self.Address())
@@ -123,12 +117,10 @@ func (d *DHT) GlobalInboundWorker() {
 
 func (d *DHT) findSuccessor(node *Node) (*Node, error) {
 	if node.Id().elementOf(d.self.Id(), d.successor.Id()) { // this interval is (]
-		println("oix")
 		return d.successor, nil
 	} else {
-		println("oix2")
 		queryNode := d.closestPrecedingNode(node)
-		resultNode, err := queryNode.GetSuccessor(node)
+		resultNode, err := queryNode.RequestSuccessor(node)
 
 		if err != nil {
 			return nil, err
