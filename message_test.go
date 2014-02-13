@@ -1,13 +1,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"testing"
 	"time"
 )
 
 func TestMarshalling(t *testing.T) {
 	ts := time.Now().UTC()
-	m1 := &Message{Intent: "PING", Timestamp: ts, Parameters: []string{"65", "áéíõú"}}
+	m1 := &Message{Intent: _M_REPLY_PING, Timestamp: ts, Parameters: []string{"65", "áéíõú"}}
 
 	buf, err := m1.MessageEncode()
 
@@ -18,6 +19,8 @@ func TestMarshalling(t *testing.T) {
 	m2, err := MessageDecode(buf)
 
 	if err != nil {
+		decBuf, err := base64.URLEncoding.DecodeString(string(buf))
+		t.Log(string(decBuf))
 		t.Fatal(err.Error())
 	}
 

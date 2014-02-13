@@ -7,24 +7,41 @@ import (
 )
 
 const (
-	REQUEST_SUCCESSOR = "REQ SUCCESSOR"
-	REPLY_SUCCESSOR   = "ACK SUCCESSOR"
-	REQUEST_PING      = "PING"
-	REPLY_PING        = "PONG"
+	_M_REQUEST_SUCCESSOR = byte(iota)
+	_M_REQUEST_PREDECESSOR
+	_M_REQUEST_PING
+	_M_NOTIFY
+	_M_REPLY_SUCCESSOR
+	_M_REPLY_PREDECESSOR
+	_M_REPLY_PING
 )
 
 type Message struct {
-	Intent     string    `json:"intent"`
+	Intent     byte      `json:"intent"`
 	Parameters []string  `json:"parameters"`
 	Timestamp  time.Time `json:"timestamp"`
-	Sender     *Node     `json:"-"`
+	SenderAddr string    `json:"senderaddr"`
+	SenderHash string    `json:"senderhash"`
 }
 
-func NewFindSuccessorMessage(params []string) *Message {
-	return &Message{
-		Intent:     REQUEST_SUCCESSOR,
+type Envelope struct {
+	message *Message
+	sender  *Node
+}
+
+func (m *Message) NewEvelope() *Envelope {
+	return &Envelope{
+		message: m,
+	}
+}
+
+func (n *Node) NewMessage(intent byte, params []string) Message {
+	return Message{
+		Intent:     intent,
 		Parameters: params,
 		Timestamp:  time.Now().UTC(),
+		SenderHash: n.Id().String(),
+		SenderAddr: n.GlobalAddress(),
 	}
 }
 

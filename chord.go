@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+  "fmt"
 )
 
 func main() {
@@ -9,12 +10,20 @@ func main() {
 	joinPtr := flag.String("join", "address:port", "hostname to join to")
 	flag.Parse()
 
-	// TODO: autogenerate node id
-	self := NewNode(*listenPtr)
+	selfKey, err := NewKeyID().GenerateKeyID(*listenPtr)
+
+  fmt.Printf("\x1b[32mkey: %s \x1b[0m\n", selfKey.String())
+
+	if err != nil {
+		println("LOLWUT")
+		panic(err)
+	}
+
+	self := NewNode(selfKey, *listenPtr)
 	dht := NewDHT(self)
 
 	if *joinPtr != "address:port" {
-		node := NewNode(*joinPtr)
+		node := NewNode(nil, *joinPtr)
 		dht.Join(node)
 	}
 

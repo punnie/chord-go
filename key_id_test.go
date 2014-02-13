@@ -5,9 +5,9 @@ import (
 )
 
 func TestKeyElementOf(t *testing.T) {
-	k1 := NewKeyID("6666666666666666666666666666666666666666")
-	k2 := NewKeyID("9999999999999999999999999999999999999999")
-	k3 := NewKeyID("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	k1 := NewKeyID().SetHash("6666666666666666666666666666666666666666")
+	k2 := NewKeyID().SetHash("9999999999999999999999999999999999999999")
+	k3 := NewKeyID().SetHash("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	test1 := k1.elementOf(k2, k3)
 
@@ -41,9 +41,9 @@ func TestKeyElementOf(t *testing.T) {
 }
 
 func TestFingerCalculations(t *testing.T) {
-	k1 := NewKeyID("ffffffffffffffffffffffffffffffffffffffff")
+	k1 := NewKeyID().SetHash("0fffffffffffffffffffffffffffffffffffffff")
 
 	for i := 0; i < BITS; i++ {
-		println(k1.CalculateForFinger(i).String())
+		k1.add2nModK(i, BITS)
 	}
 }

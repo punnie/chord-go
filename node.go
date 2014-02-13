@@ -4,63 +4,53 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
-	"time"
+  "time"
+  "errors"
 )
 
 type Node struct {
-	id           *KeyID
-	address      string
-	conn         net.Conn
-	writer       *bufio.Writer
-	localInbound chan *Message
+	id            *KeyID
+	dht           *DHT
+	globalAddress string
+	localAddress  string
+	conn          net.Conn
+	reader        *bufio.Reader
+	writer        *bufio.Writer
+	localInbound  chan *Message
+	localOutbound chan *Message
+	quit          chan bool
 }
 
-func NewNode(address string) *Node {
-	println("new connection:", address)
-
-	i := new(KeyID)
-	err := i.GenerateNodeKeyID(address)
-
-	if err != nil {
-		panic(err)
-	}
-
-	n := &Node{
-		id:           i,
-		address:      address,
-		localInbound: make(chan *Message),
-	}
-
-	fmt.Println("new node id hex:", i.String())
-	return n
-}
-
-func FakeNode(hex string) *Node {
-	i := NewKeyID(hex)
-
+func NewNode(id *KeyID, globalAddress string) *Node {
 	return &Node{
-		id: i,
+		id:            id,
+		globalAddress: globalAddress,
+		localInbound:  make(chan *Message),
+		localOutbound: make(chan *Message),
+		quit:          make(chan bool),
 	}
 }
 
-func (n *Node) Accept(conn net.Conn, globalInbound chan<- *Message) {
+func (n *Node) Accept(d *DHT, conn net.Conn) {
+	n.dht = d
 	n.conn = conn
 
-	go n.handleConnection(globalInbound)
+	go n.handleConnection()
 }
 
 func (n Node) Id() *KeyID {
 	return n.id
 }
 
-func (n Node) Address() string {
-	return n.address
+func (n Node) GlobalAddress() string {
+	return n.globalAddress
 }
 
-func (n *Node) Connect(globalInbound chan<- *Message) error {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", n.address)
+func (n *Node) Connect(d *DHT) error {
+	n.dht = d
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", n.globalAddress)
 
 	if err != nil {
 		return err
@@ -72,50 +62,83 @@ func (n *Node) Connect(globalInbound chan<- *Message) error {
 		return err
 	}
 
-	go n.handleConnection(globalInbound)
+	go n.handleConnection()
 
 	return nil
 }
 
-func (n *Node) handleConnection(globalInbound chan<- *Message) {
+func (n *Node) Close() {
+	n.quit <- true
+}
+
+func (n *Node) handleConnection() {
 	reader := bufio.NewReader(n.conn)
 
 	for {
-		mesBuffer, err := readMessage(reader)
+		select {
+		case <-n.quit:
+			defer n.conn.Close()
+			println("connection to node closed!")
+			break
 
-		if err != nil {
-			n.conn.Close()
-			return
+		default:
+			mesBuffer, err := readMessage(reader)
+
+			if err != nil {
+				n.conn.Close()
+				return
+			}
+
+			mes, err := MessageDecode(mesBuffer)
+
+			if err != nil {
+				println("Error decoding message!")
+				continue
+			}
+
+			if n.id == nil {
+				senderHash := mes.SenderHash
+				senderAddr := mes.SenderAddr
+
+				nodeId := NewKeyID().SetHash(senderHash)
+				n.id = nodeId
+				n.globalAddress = senderAddr
+
+				n.dht.nodePool.PutNode(n)
+			}
+
+			switch mes.Intent {
+			case _M_REPLY_SUCCESSOR:
+				fallthrough
+			case _M_REPLY_PREDECESSOR:
+				fallthrough
+			case _M_REPLY_PING:
+				n.localInbound <- mes
+
+			case _M_REQUEST_SUCCESSOR:
+				fallthrough
+			case _M_REQUEST_PREDECESSOR:
+				fallthrough
+			case _M_NOTIFY:
+				fallthrough
+			case _M_REQUEST_PING:
+				envelope := mes.NewEvelope()
+				envelope.sender = n
+
+				n.dht.globalInbound <- envelope
+			}
 		}
 
-		mes, err := MessageDecode(mesBuffer)
-
-		if err != nil {
-			println("Error decoding message!")
-			continue
-		}
-
-		switch mes.Intent {
-		case REPLY_SUCCESSOR:
-			fallthrough
-		case REPLY_PING:
-			n.localInbound <- mes
-		case REQUEST_SUCCESSOR:
-			fallthrough
-		case REQUEST_PING:
-			mes.Sender = n
-			globalInbound <- mes
-		}
 	}
 }
 
-func (n *Node) sendMessage(m *Message) (int, error) {
+func (n *Node) sendMessage(m Message) (int, error) {
 	// TODO: verify we have an active connection
 	if n.writer == nil {
 		n.writer = bufio.NewWriter(n.conn) // this is not threadsafe!
 	}
 
-	println("sending        :", m.String())
+  //println("sending        :", m.String())
 
 	buf := new(bytes.Buffer)
 	payload, err := m.MessageEncode()
@@ -149,26 +172,24 @@ func (n *Node) sendMessage(m *Message) (int, error) {
 	return w, nil
 }
 
-func (n *Node) RequestSuccessor(node *Node) (*Node, error) {
-	queryKey := node.Id()
-	n.sendMessage(NewFindSuccessorMessage([]string{queryKey.String()}))
+func (n *Node) RequestSuccessor(id *KeyID) (*Node, error) {
+	requestMessage := n.dht.self.NewMessage(_M_REQUEST_SUCCESSOR, []string{id.String()})
+	n.sendMessage(requestMessage)
 
-	reply := <-n.localInbound
-	println("received reply :", reply.String())
+	replyMessage := <-n.localInbound
+	successorId := NewKeyID().SetHash(replyMessage.Parameters[0])
+	successorAddr := replyMessage.Parameters[1]
 
-	return &Node{}, nil
+	return n.dht.nodePool.GetNode(successorId, successorAddr), nil
 }
 
 func (n *Node) ReplySuccessor(node *Node) error {
-	reply := &Message{
-		Intent:     REPLY_SUCCESSOR,
-		Parameters: []string{node.Id().String(), node.Address()},
-		Timestamp:  time.Now().UTC(),
-	}
+	reply := n.dht.self.NewMessage(_M_REPLY_SUCCESSOR, []string{
+		node.Id().String(),
+		node.GlobalAddress(),
+	})
 
-	w, err := n.sendMessage(reply)
-
-	println("sending size   :", w)
+	_, err := n.sendMessage(reply)
 
 	if err != nil {
 		return err
@@ -178,11 +199,34 @@ func (n *Node) ReplySuccessor(node *Node) error {
 }
 
 func (n *Node) RequestPredecessor() (*Node, error) {
-	return nil, nil
+	requestMessage := n.dht.self.NewMessage(_M_REQUEST_PREDECESSOR, []string{})
+	n.sendMessage(requestMessage)
+
+	replyMessage := <-n.localInbound
+
+	if len(replyMessage.Parameters) > 0 {
+		predecessorId := NewKeyID().SetHash(replyMessage.Parameters[0])
+		predecessorAddr := replyMessage.Parameters[1]
+
+		return n.dht.nodePool.GetNode(predecessorId, predecessorAddr), nil
+	} else {
+		return nil, nil
+	}
 }
 
-func (n *Node) SendPing() error {
-	_, err := n.sendMessage(&Message{Intent: REQUEST_PING, Timestamp: time.Now().UTC()})
+func (n *Node) ReplyPredecessor(node *Node) error {
+	var reply Message
+
+	if node == nil {
+		reply = n.dht.self.NewMessage(_M_REPLY_PREDECESSOR, []string{})
+	} else {
+		reply = n.dht.self.NewMessage(_M_REPLY_PREDECESSOR, []string{
+			node.Id().String(),
+			node.GlobalAddress(),
+		})
+	}
+
+	_, err := n.sendMessage(reply)
 
 	if err != nil {
 		return err
@@ -191,8 +235,30 @@ func (n *Node) SendPing() error {
 	return nil
 }
 
+func (n *Node) Notify(node *Node) {
+	requestMessage := n.dht.self.NewMessage(_M_NOTIFY, []string{})
+	n.sendMessage(requestMessage)
+}
+
+func (n *Node) SendPing() error {
+	queryMessage := n.dht.self.NewMessage(_M_REQUEST_PING, nil)
+	_, err := n.sendMessage(queryMessage)
+
+	if err != nil {
+		return err
+	}
+
+  select {
+  case _ = <-n.localInbound:
+    return nil
+  case <-time.After(time.Millisecond * 100):
+    return errors.New("LOL")
+  }
+}
+
 func (n *Node) ReplyPing() error {
-	_, err := n.sendMessage(&Message{Intent: REPLY_PING, Timestamp: time.Now().UTC()})
+	replyMessage := n.dht.self.NewMessage(_M_REPLY_PING, nil)
+	_, err := n.sendMessage(replyMessage)
 
 	if err != nil {
 		return err
